@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Weekly Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header {
+      background-color: #343a40;
+      color: white;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 30px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .btn {
+      padding: 12px 25px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    img {
+      width: 100%;
+      max-width: 700px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📈 Weekly Distraction Report</h1>
+</header>
+
+<div class="container">
+  <h2>Focus Summary Chart</h2>
+
+  {% if graph_exists %}
+    <img src="/static/focus_chart.png" alt="Focus Chart">
+  {% else %}
+    <p>No report data available yet. Please take an exam session first.</p>
+  {% endif %}
+
+  <br><br>
+  <a class="btn" href="/">⬅ Back to Exam</a>
+</div>
+
+</body>
+</html>

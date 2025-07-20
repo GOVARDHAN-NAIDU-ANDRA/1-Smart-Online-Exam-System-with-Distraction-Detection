@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Concentration Tracker + Exam</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body.light { background: #f4f4f4; color: #222; }
+    body.dark { background: #1b1b3a; color: #eee; }
+
+    .container {
+      display: flex;
+      justify-content: space-between;
+      padding: 20px;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .exam-area {
+      flex: 2;
+      min-width: 60%;
+    }
+
+    .camera-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .video-frame {
+      border: 4px solid #444;
+      border-radius: 10px;
+      width: 320px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.4);
+    }
+
+    .question {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .dark .question { background: #2e2e52; }
+
+    .btn {
+      margin: 5px;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 200px;
+    }
+
+    .btn-save { background: #007bff; color: white; }
+    .btn-report { background: #28a745; color: white; }
+    .btn-theme { background: #ffc107; color: black; }
+    .btn-submit { background: #dc3545; color: white; }
+
+    #alert-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: red;
+      color: white;
+      font-size: 18px;
+      padding: 12px;
+      font-weight: bold;
+      text-align: center;
+      z-index: 9999;
+    }
+
+    #status-text {
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+      margin-top: 10px;
+    }
+
+    .correct-answer { color: green; font-weight: bold; }
+    .wrong-answer { color: red; font-weight: bold; }
+    #result { margin-top: 20px; font-weight: bold; font-size: 18px; }
+    #timer { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #dc3545; }
+    #distraction-counter { margin-top: 8px; color: #dc3545; font-weight: bold; }
+
+    .question img {
+      max-width: 100px;
+      display: block;
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body class="light">
+
+  <div id="alert-banner">🚨 Stay Focused!</div>
+
+  <div class="container">
+    <div class="exam-area">
+      <h2>📝 Online Proctored Exam</h2>
+      <div id="timer">Time Left: 05:00</div>
+      <form id="examForm" onsubmit="return gradeExam();">
+        <div id="questions"></div>
+        <button class="btn btn-submit" type="submit">✅ Submit Exam</button>
+      </form>
+      <div id="result"></div>
+    </div>
+
+    <div class="camera-section">
+      <img src="{{ url_for('video_feed') }}" class="video-frame" id="camera" />
+      <div id="status-text">Status: Loading...</div>
+      <div id="distraction-counter">Distractions: 0</div>
+      <button class="btn btn-theme" onclick="toggleTheme()">🌓 Theme</button>
+    </div>
+  </div>
+
+  <script>
+    let detectionOn = true;
+    let distractionCount = 0;
+    let submitted = false;
+    let timerInterval;
+    let lastSpoken = 0;
+
+    const quizData = [
+      { q: "1. Capital of India?", a: ["Mumbai", "Delhi", "Bangalore", "Hyderabad"], correct: 1 },
+      { q: "2. FIFO structure?", a: ["Stack", "Queue", "Tree", "Graph"], correct: 1 },
+      { q: "3. CPU means?", a: ["Core Unit", "Central Process", "Central Processing Unit", "Computer Processing"], correct: 2 },
+      { q: "4. Father of Computer?", a: ["Turing", "Newton", "Babbage", "Elon Musk"], correct: 2 },
+      { q: "6. What is shown below?", a: ["Cat", "Dog", "Horse", "Elephant"], correct: 1 },
+      { q: "7. Identify this animal", a: ["Cat", "Tiger", "Cow", "Lion"], correct: 0, img: "https://cdn.pixabay.com/photo/2017/11/09/21/41/cat-2934720_1280.jpg" },
+      { q: "8. Java is?", a: ["Compiled", "Interpreted", "Both", "None"], correct: 2 },
+      { q: "9. 1 byte = ?", a: ["8 bits", "4 bits", "1024 bits", "1 bit"], correct: 0 },
+      { q: "10. HTTPS is?", a: ["Secure", "Fast", "Slow", "Old"], correct: 0 }
+    ];
+
+    function speakMessage(msg) {
+      const now = Date.now();
+      if (now - lastSpoken < 5000) return;
+      lastSpoken = now;
+      const utterance = new SpeechSynthesisUtterance(msg);
+      utterance.lang = "en-US";
+      utterance.volume = 1;
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function renderQuestions() {
+      const qDiv = document.getElementById("questions");
+      quizData.forEach((q, idx) => {
+        const block = document.createElement("div");
+        block.className = "question";
+        block.innerHTML = `<h3>${q.q}</h3>`;
+        if (q.img) block.innerHTML += `<img src="${q.img}" alt="Option Image" />`;
+        q.a.forEach((opt, i) => {
+          block.innerHTML += `<label><input type="radio" name="q${idx}" value="${i}"> ${opt}</label><br>`;
+        });
+        qDiv.appendChild(block);
+      });
+    }
+
+    function gradeExam() {
+      if (submitted) return false;
+      clearInterval(timerInterval);
+      submitted = true;
+
+      const resultDiv = document.getElementById("result");
+      let score = 0;
+
+      quizData.forEach((q, idx) => {
+        const radios = document.getElementsByName(`q${idx}`);
+        let selected = -1;
+        radios.forEach(r => { if (r.checked) selected = parseInt(r.value); });
+
+        const questionDiv = document.querySelectorAll(".question")[idx];
+        const feedback = document.createElement("div");
+
+        if (selected === q.correct) {
+          score++;
+          feedback.innerHTML = `✅ Your Answer: <strong class="correct-answer">${q.a[selected]}</strong> is Correct`;
+        } else {
+          feedback.innerHTML = `❌ Your Answer: <strong class="wrong-answer">${q.a[selected] || "None"}</strong><br>✔ Correct Answer: <strong class="correct-answer">${q.a[q.correct]}</strong>`;
+        }
+        questionDiv.appendChild(feedback);
+      });
+
+      resultDiv.innerHTML = `✅ You scored <strong>${score} / ${quizData.length}</strong>`;
+      return false;
+    }
+
+    function checkAlert() {
+      fetch('/get_alert')
+        .then(res => res.json())
+        .then(data => {
+          const banner = document.getElementById("alert-banner");
+          const statusText = document.getElementById("status-text");
+
+          if (data.alert && data.alert.includes("Distracted")) {
+            banner.style.display = 'block';
+            distractionCount++;
+            document.getElementById("distraction-counter").textContent = `Distractions: ${distractionCount}`;
+            speakMessage("You are distracted. Please stay focused.");
+            statusText.textContent = `Status: Distracted`;
+            statusText.style.color = "red";
+          } else if (data.alert && data.alert.includes("No Face")) {
+            banner.style.display = 'block';
+            statusText.textContent = `Status: No Face Detected`;
+            statusText.style.color = "#999";
+          } else {
+            banner.style.display = 'none';
+            statusText.textContent = `Status: Focused`;
+            statusText.style.color = "green";
+          }
+        });
+    }
+
+    function startTimer(seconds) {
+      const timer = document.getElementById("timer");
+      timerInterval = setInterval(() => {
+        const min = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const sec = String(seconds % 60).padStart(2, '0');
+        timer.textContent = `Time Left: ${min}:${sec}`;
+        if (--seconds < 0) {
+          clearInterval(timerInterval);
+          gradeExam();
+          alert("⏰ Time's up! Exam auto-submitted.");
+        }
+      }, 1000);
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle("dark");
+      document.body.classList.toggle("light");
+    }
+
+    window.onload = () => {
+      fetch('/toggle_detection');
+      renderQuestions();
+      startTimer(300);
+      setInterval(checkAlert, 2000);
+    };
+  </script>
+</body>
+</html>
